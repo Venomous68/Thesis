@@ -1,0 +1,4 @@
+features,threshold,precision,recall,f1,iou,ap_val,ap_scene2
+12 bands,0.4749,0.0838,0.2272,0.1224,0.0652,0.0744,0.0198
+12 bands + ratio,0.583,0.1083,0.1096,0.109,0.0576,0.0877,0.0308
+12 bands + ratio + aerosol,0.416,0.076,0.2019,0.1105,0.0585,0.074,0.0358

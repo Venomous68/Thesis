@@ -1,0 +1,4 @@
+split,level,precision,recall,f1
+train,patch,0.886,0.458,0.603
+val,patch,0.757,0.596,0.667
+val,pixel,0.508,0.035,0.066

@@ -1,0 +1,8 @@
+{
+  "level": "patch",
+  "k": 200,
+  "b12_min": 0.24,
+  "ratio_min": 1.45,
+  "train_f1": 0.6034,
+  "tuned_on": "train scenes only; F1 of fire class"
+}
