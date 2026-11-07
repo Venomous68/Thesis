@@ -136,3 +136,29 @@ U-Net run 1 (05_unet.ipynb, unet_slim.py)
 - Best-F1 threshold chosen on val (optimistic): precision 0.428, recall 0.381, F1 0.403, IoU 0.252.
 - Table: results/tabular_models_val_with_unet.csv. Figure: results/unet_examples_val.png. Scene 4 untouched. Single seed, no tuning.
 - Observations: scene3 patch 1_12 has no label but shows fire fronts (U-Net max prob 0.99); misses where labels have no visible fire front (patches 6_22, 3_11). Pixel metrics mix model and label quality.
+
+U-Net patch-level check (scene 3, patch score = mean of top 200 pixel scores, k from the frozen rule):
+- Fire patches 94, non-fire 410. Patch AP 0.723 (no-skill 0.187).
+- At the rule's false-alarm count (18/410): U-Net recall 0.617 vs rule 0.596 (58 vs 56 of 94 patches).
+- Precision at recall 0.596: 0.784 vs 0.757. Best F1 0.690 (threshold chosen on val, optimistic) vs rule 0.667.
+- Differences of ~2 patches are within noise (SE of recall ~0.05). Conclusion: at patch level the U-Net is on par with the spectral rule; its advantage is pixel-level localisation.
+
+U-Net patch recall by label size (scene 3, best-F1 patch threshold, diagnostic only):
+- 100-1000 px: 2/4; 1000-5000: 2/8; 5000-20000: 7/23 (0.30); >=20000: 47/59 (0.80). Total 58/94.
+- 36 misses: 24 have labels < 20,000 px (<8% of a patch), 12 have larger labels.
+- Frozen rule on train scenes for reference: 0/19 at 1000-5000, 12/33 at 5000-20000, 58/100 at >=20000 (different scenes, only indicative).
+- Patch score = mean of top-200 pixel scores (k inherited from the rule); small fires may be diluted by it.
+
+
+Rule vs U-Net on scene 3 by label size (patches detected): 100-1000: 2 vs 2 (of 4); 1000-5000: 2 vs 2 (of 8); 5000-20000: 6 vs 7 (of 23); >=20000: 46 vs 47 (of 59). Total 56 vs 58 of 94.
+Patch score k sensitivity (k = 20, 50, 200, 1000, all reported, none selected): patch AP 0.713 / 0.720 / 0.723 / 0.735; recall at 18/410 false alarms 0.628 / 0.628 / 0.617 / 0.617.
+Conclusion: patch-level detection is on par with the spectral rule; the U-Net's gain is pixel-level localisation.
+
+
+U-Net leave-one-scene-out (base 16, 3000 steps, seed 0, unet_loso.py; scene 4 untouched):
+- Held-out scene 1: AP 0.382, lift 11.1, recall 0.105 at FPR 0.125%, 0.259 at 1%.
+- Held-out scene 2: AP 0.354, lift 30.9, recall 0.245 at 0.125%, 0.461 at 1% (only 38 fire patches).
+- Held-out scene 3: AP 0.274, lift 7.7, recall 0.054 at 0.125%, 0.243 at 1%. Notebook run of the same recipe gave AP 0.311 / 0.273 at 1% -> run-to-run spread ~0.04 AP.
+- Logistic regression (best tabular): AP 0.179 / 0.043 / 0.120 on scenes 1 / 2 / 3.
+- Patch-level AP (top-200 mean score): 0.697 / 0.595 / 0.715.
+- Precision/recall/F1 use best-F1 threshold chosen on the held-out scene (optimistic). Table: results/loso_all_models_with_unet.csv.
