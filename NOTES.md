@@ -89,3 +89,50 @@ Last updated: 2026-10-28
 - Inspect the 9 train false-alarm patches and the missed fire patches (possible label problems).
 - U-Net with the authors' normalisation (Max_values) and the same train/val/test protocol.
 - Final one-time evaluation on the test scene (scene 4) for: threshold rule, Random Forest, U-Net.
+
+
+
+
+
+
+
+
+- Tabular models, val scene 3 (authors' split; 12 bands + ratio; results/tabular_models_val.csv):
+  RF: AP 0.092, recall@FPR0.125% 0.018, @1% 0.053, F1 0.142
+  CatBoost: AP 0.103, 0.018, 0.072, F1 0.151
+  Logistic regression: AP 0.125, 0.040, 0.093, F1 0.153
+  Threshold rule at its own FPR (0.125%): recall 0.035.
+- At equal false-alarm rate, ML models do not clearly beat the threshold rule at pixel level; they gain F1 by accepting ~100x more false alarms.
+- Hypothesis: flexible models overfit scene-specific patterns. TO TEST: leave-one-scene-out over scenes 1-3 (scene 4 stays locked).
+
+
+- LOSO over scenes 1-3, 12 bands + ratio (scene 4 locked; results/loso_scenes123_tabular.csv), mean AP / lift:
+  Logistic regression 0.114 / 4.13; Random Forest 0.078 / 2.70; CatBoost 0.075 / 2.52
+  Logistic regression best in every fold (AP gap vs RF: +0.047, +0.020, +0.039).
+- Recall at 0.125% FPR: LR 0.032+-0.006 ~ threshold rule (0.035) -> LR ~ rediscovers the SWIR ratio rule.
+- Scene 2 is hardest (AP 0.019-0.043, lift 1.6-3.8); scene 1 easiest.
+- F1 is unstable across folds (LR 0.256 / 0.049 / 0.161): use AP, lift and recall at fixed FPR as main metrics.
+- Caveat: RF (depth 20) and CatBoost (depth 6) not tuned; testing shallow versions.
+
+
+
+- Scene aerosol medians (patch-median of medians): scene1 -0.68, scene2 -0.32, scene3 +0.92.
+- LOSO (scenes 1-3), mean AP / lift / recall@FPR0.125% / recall@FPR1%:
+  LR + aerosol (scene-norm): 0.141 / 5.05 / 0.046 / 0.134  (gain over LR in all folds: +0.054, +0.008, +0.020)
+  LR: 0.114 / 4.13 / 0.032 / 0.100
+  RF shallow (depth 8, leaf 200): 0.094 / 3.62 / 0.021 / 0.075   (RF deep 0.078)
+  CatBoost shallow (depth 3, l2 10): 0.092 / 3.07 / 0.016 / 0.073 (CatBoost deep 0.075)
+- Regularising trees helps (+0.016) but LR still leads on average. Scene-normalised aerosol needs the whole scene -> not available onboard; flag in deployment discussion. Check dataset paper for aerosol source.
+- Frozen for final test (scene 4, once): threshold rule, LR (13 feats), LR + scene-norm aerosol, RF shallow, CatBoost shallow.
+
+
+
+U-Net run 1 (05_unet.ipynb, unet_slim.py)
+- Model: authors' U-Net (Networks.py structure, bilinear upsampling), width parameter base=16 -> 1.08 M parameters (authors' base=64: 17.3 M).
+- Input: 13 channels (12 bands / 10000 + aerosol), z-scored with statistics from the training crop bank only (results/unet_norm_stats.npz).
+- Training data: scenes 1+2, crop bank of 2,805 crops of 128x128 (1,500 around fire pixels, 1,305 background, one per non-fire patch). Fire share 31.3% vs 2.5% real.
+- Training: batches of 4 fire + 4 background crops, random flips/rot90, Adam, lr 1e-3 cosine to 1e-5, 3,000 steps, plain cross-entropy, seed 0. 22.6 min on GeForce 940MX. PyTorch 2.14.1+cu126 (cu128 builds dropped Maxwell GPUs).
+- Evaluation: scene 3 (504 full patches), scores binned (4,000 bins), scored with evalkit. AP 0.311 (lift 8.75), recall 0.065 at FPR 0.125%, 0.273 at FPR 1%.
+- Best-F1 threshold chosen on val (optimistic): precision 0.428, recall 0.381, F1 0.403, IoU 0.252.
+- Table: results/tabular_models_val_with_unet.csv. Figure: results/unet_examples_val.png. Scene 4 untouched. Single seed, no tuning.
+- Observations: scene3 patch 1_12 has no label but shows fire fronts (U-Net max prob 0.99); misses where labels have no visible fire front (patches 6_22, 3_11). Pixel metrics mix model and label quality.

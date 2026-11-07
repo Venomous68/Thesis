@@ -1,0 +1,4 @@
+model,thr,ap,recall@fpr0.125%,recall@fpr1%,precision,recall,f1,iou,fpr
+Random Forest,0.366,0.092,0.018,0.053,0.085,0.427,0.142,0.076,0.17
+Logistic regression,0.292,0.125,0.04,0.093,0.096,0.374,0.153,0.083,0.129
+CatBoost,0.36,0.103,0.018,0.072,0.092,0.439,0.151,0.082,0.16

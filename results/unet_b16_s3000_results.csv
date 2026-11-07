@@ -1,0 +1,5 @@
+model,split,metric,value
+unet_b16_s3000,val_pixel,AP,0.3113670646783339
+unet_b16_s3000,val_pixel,recall_at_fpr_0.001,0.05623739351326754
+unet_b16_s3000,val_pixel,recall_at_fpr_0.01,0.2729349648019647
+unet_b16_s3000,val_pixel,recall_at_fpr_0.05,0.479252289938756
