@@ -162,3 +162,56 @@ U-Net leave-one-scene-out (base 16, 3000 steps, seed 0, unet_loso.py; scene 4 un
 - Logistic regression (best tabular): AP 0.179 / 0.043 / 0.120 on scenes 1 / 2 / 3.
 - Patch-level AP (top-200 mean score): 0.697 / 0.595 / 0.715.
 - Precision/recall/F1 use best-F1 threshold chosen on the held-out scene (optimistic). Table: results/loso_all_models_with_unet.csv.
+
+
+## U-Net error analysis, scene 3 (qualitative, 5 patches)
+
+Figure: results/unet_misses_fp_with_imagery_scene3.png
+Patches: 254, 58, 356 (misses), 97, 11 (false alarms). Row index follows val.txt
+order, checked against the labels. Detections use the score threshold at 1% FPR
+on scene 3 pixels. Patches were chosen as the largest misses and the
+highest-scoring false alarms, NOT at random, so this is not a measured share
+of errors. Scene 3 is a held-out scene: do not tune the model on these patches.
+
+Observed error types:
+1. Labels covering unburnt land. Patch 254: the fire front and smoke plume are
+   in one corner, and the U-Net finds exactly that area; the rest of the label
+   (about 147k px) covers vegetation with no visible fire signal. Patch 58: the
+   label sits over dense forest with no visible fire front or burn scar.
+2. Possibly unlabelled fires. Patches 97 and 11 have no fire label, but the
+   SWIR composite shows orange-red hot spots and dark burn scar under the
+   U-Net detection. Pixel false alarms are therefore partly real fire.
+3. Smoke / cloud confusion. Patch 356: thick smoke or cloud dominates; the high
+   scores follow smoke edges, and the labelled band shows no visible flame front.
+
+Consequences:
+- Pixel AP and recall at fixed FPR probably understate the model, because the
+  labels are coarse and incomplete.
+- Causes are read off one composite per patch, not confirmed independently.
+- Hot spots in the false alarms could be checked against B11/B12 values.
+
+TODO: repeat on a random sample (about 20 misses, 20 false alarms) to estimate
+how common each type is.
+![alt text](image.png)
+
+
+## Error analysis, scene 3 (U-Net base 16, seed 0, threshold at 1% FPR)
+
+Sample (seed 123): 20 of 43 "miss" patches (label >= 1000 px, < 5% of label detected)
+and all 16 "false alarm" patches (no label, >= 500 detected px). Tags assigned by
+visual reading of RGB, SWIR (11,7,3) and the score map. File: results/error_sample_scene3.csv.
+
+Result:
+- Misses (20): 16 label covers land with no visible fire (L), 3 not verifiable under
+  cloud/smoke (?), 1 smoke confusion (S). 0 clear model misses (M).
+- False alarms (16): 16 look like real, unlabelled fires (U), with a compact SWIR hot spot.
+- Many miss labels are small boxes at the patch border (hypothesis: clipped labels of
+  fires that continue in a neighbouring patch; not yet measured).
+
+Caveats:
+- Tags are one rater's judgement (partly discussed with the AI assistant); not independent.
+  TODO: blind re-tag of ~10 patches by the supervisor, report agreement.
+- Sample is not uniform (23 of 43 misses and tiny-label misses not examined).
+- One scene, one seed. Orange in SWIR can also be bare ground; B11/B12 values not checked.
+- Consequence: pixel AP and recall at fixed FPR probably understate the model here,
+  because many "false positives" look like real fires.
