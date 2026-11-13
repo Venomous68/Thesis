@@ -1,0 +1,37 @@
+idx,kind,label_px,det_px,tag,note
+459,miss,15680,0,L,
+330,miss,43103,29,L,hot pixels at label edge
+28,false alarm,0,9843,U,
+22,miss,16258,0,L,
+79,miss,2596,0,?,
+82,miss,3267,605,L,"model detects hot spots at bottom, outside label"
+11,false alarm,0,51959,U,
+26,false alarm,0,36848,U,"left outline over haze, right one hot"
+98,false alarm,0,10230,U,"small, smoke around, less certain"
+322,false alarm,0,6544,U,hot spot at patch edge
+97,false alarm,0,28947,U,
+325,miss,9185,11125,L,"3 hot spots; one just below label at right edge, others unlabelled"
+86,miss,8526,0,L,
+12,false alarm,0,23548,U,
+179,miss,11859,0,?,"label under thick cloud/smoke, cannot verify"
+62,false alarm,0,13492,U,small hot spot at patch corner
+176,miss,17139,0,L,
+96,miss,2400,0,L,
+286,false alarm,0,4023,U,small hot spot at patch corner
+327,miss,7880,0,?,"label under thick cloud, cannot verify"
+319,miss,3900,0,L,
+47,false alarm,0,34666,U,
+201,miss,13731,0,L,"dark block in label, looks like dark land not fire; checked at zoom"
+291,miss,5520,2351,S,detections on smoke edge top-left; label under smoke
+27,false alarm,0,48925,U,
+287,false alarm,0,8531,U,
+356,miss,64470,0,L,pink patch at right end of box; low confidence
+355,miss,9900,0,L,
+103,miss,9800,0,L,
+357,miss,63732,3558,L,"separate hot core at bottom, outside label (unlabelled fire)"
+329,miss,48757,0,L,
+7,miss,2420,0,L,
+323,false alarm,0,69083,U,
+133,false alarm,0,5397,U,hot spot at top edge of patch
+359,false alarm,0,29394,U,
+68,false alarm,0,39724,U,
