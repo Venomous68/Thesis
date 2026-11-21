@@ -1,6 +1,6 @@
 # Sen2Fire thesis - working notes
 
-Last updated: 2026-10-28
+
 
 ## 1. Project layout
 
