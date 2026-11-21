@@ -7,10 +7,20 @@ import torch.nn.functional as F
 import evalkit
 from unet_slim import UNetSlim
 
+
 PROJECT_DIR = Path(__file__).resolve().parent
 EXTRACT_DIR = PROJECT_DIR / "data" / "sen2fire"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 CROP = 128
+
+CONFIGS = {
+    "c1": list(range(13)),
+    "c2": list(range(12)),
+    "c3": [1, 2, 3, 7, 10, 11],
+    "c4": [3, 7, 10, 11],
+    "c5": [7, 10, 11],
+}
+
 
 def load_index():
     idx = pd.read_csv(PROJECT_DIR / "data" / "unet_index.csv")
@@ -19,9 +29,11 @@ def load_index():
     assert set(idx.scene) <= {1, 2, 3}, "scene 4 must never be loaded here"
     return idx
 
+
 def load_patch(rel):
     with np.load(EXTRACT_DIR / rel) as d:
         return d["image"], d["aerosol"], d["label"]
+
 
 def build_bank(train_df, n_fire, seed, max_bg=None):
     rng = np.random.default_rng(seed)
@@ -58,6 +70,7 @@ def build_bank(train_df, n_fire, seed, max_bg=None):
     assert k == N
     return {"X": X, "A": A, "Y": Y, "n_fire": n_fire}
 
+
 def norm_stats(bank):
     sub = bank["X"][::6].astype(np.float32) / 10000.0
     mean, std = sub.mean(axis=(0, 2, 3)), sub.std(axis=(0, 2, 3)) + 1e-6
@@ -66,12 +79,13 @@ def norm_stats(bank):
     std13 = np.concatenate([std, [a.std() + 1e-6]]).astype(np.float32).reshape(1, 13, 1, 1)
     return mean13, std13
 
-def make_batch(bank, stats, rng, bs=8):
+
+def make_batch(bank, stats, rng, sel, bs=8):
     X, A, Y, nf = bank["X"], bank["A"], bank["Y"], bank["n_fire"]
     ids = np.concatenate([rng.choice(nf, bs // 2, replace=False),
                           nf + rng.choice(len(X) - nf, bs - bs // 2, replace=False)])
     x = np.concatenate([X[ids].astype(np.float32) / 10000.0, A[ids].astype(np.float32)[:, None]], axis=1)
-    x = (x - stats[0]) / stats[1]
+    x = ((x - stats[0]) / stats[1])[:, sel]
     y = Y[ids].astype(np.int64)
     xs, ys = [], []
     for i in range(len(ids)):
@@ -83,17 +97,18 @@ def make_batch(bank, stats, rng, bs=8):
         ys.append(np.ascontiguousarray(yi))
     return torch.from_numpy(np.stack(xs)), torch.from_numpy(np.stack(ys))
 
-def train(bank, stats, steps, seed, ckpt):
+
+def train(bank, stats, steps, seed, ckpt, sel):
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
-    model = UNetSlim(n_classes=2, n_channels=13, base=16).to(DEVICE)
+    model = UNetSlim(n_classes=2, n_channels=len(sel), base=16).to(DEVICE)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=steps, eta_min=1e-5)
     every = min(100, steps)
     model.train()
     run, t0 = 0.0, time.perf_counter()
     for step in range(1, steps + 1):
-        xb, yb = make_batch(bank, stats, rng)
+        xb, yb = make_batch(bank, stats, rng, sel)
         xb, yb = xb.to(DEVICE), yb.to(DEVICE)
         loss = F.cross_entropy(model(xb), yb)
         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
@@ -104,7 +119,8 @@ def train(bank, stats, steps, seed, ckpt):
     torch.save(model.state_dict(), ckpt)
     return model
 
-def score_scene(model, stats, test_df, bsz=4):
+
+def score_scene(model, stats, test_df, sel, bsz=4):
     model.eval()
     n = len(test_df)
     S = np.empty((n, 512, 512), dtype=np.float16)
@@ -114,13 +130,14 @@ def score_scene(model, stats, test_df, bsz=4):
             items = [load_patch(r) for r in test_df.rel.iloc[s:s + bsz]]
             x = np.stack([np.concatenate([i[0].astype(np.float32) / 10000.0,
                                           i[1].astype(np.float32)[None]], axis=0) for i in items])
-            x = (x - stats[0]) / stats[1]
-            z = model(torch.from_numpy(x).to(DEVICE))
+            x = ((x - stats[0]) / stats[1])[:, sel]
+            z = model(torch.from_numpy(np.ascontiguousarray(x)).to(DEVICE))
             S[s:s + len(items)] = (z[:, 1] - z[:, 0]).cpu().numpy().astype(np.float16)
             YV[s:s + len(items)] = np.stack([i[2] for i in items])
             if (s // bsz) % 50 == 0:
                 print(f"  scored {s}/{n}", flush=True)
     return S, YV
+
 
 def metrics(S, YV):
     NB = 4000
@@ -147,36 +164,41 @@ def metrics(S, YV):
             "patch_ap": evalkit.average_precision(y_p, score_p),
             "fire_patches": int(y_p.sum()), "patches": len(y_p)}
 
-def run_fold(held_out, steps=3000, seed=0, smoke=False):
+
+def run_fold(held_out, steps=3000, seed=0, smoke=False, cfg="c1"):
     assert held_out in (1, 2, 3)
+    sel = CONFIGS[cfg]
     idx = load_index()
     train_df = idx[idx.scene != held_out].reset_index(drop=True)
     test_df = idx[idx.scene == held_out].reset_index(drop=True)
     if smoke:
         test_df = pd.concat([test_df.sort_values("fire_px", ascending=False).head(4),
                              test_df.sort_values("fire_px").head(4)]).reset_index(drop=True)
-    print(f"fold {held_out}: train {len(train_df)} patches, test {len(test_df)} patches", flush=True)
+    print(f"fold {held_out} config {cfg} ({len(sel)} ch): train {len(train_df)} patches, test {len(test_df)} patches", flush=True)
     t0 = time.perf_counter()
     bank = build_bank(train_df, n_fire=60 if smoke else 1500, seed=seed, max_bg=60 if smoke else None)
     print(f"  bank built in {time.perf_counter() - t0:.0f} s, {len(bank['X'])} crops", flush=True)
     stats = norm_stats(bank)
-    tag = f"unet_b16_s{steps}_heldout{held_out}" + ("_smoke" if smoke else "")
-    model = train(bank, stats, steps, seed, PROJECT_DIR / "results" / f"{tag}.pt")
+    tag = f"unet_b16_s{steps}_heldout{held_out}" + ("" if cfg == "c1" else f"_{cfg}") + ("_smoke" if smoke else "")
+    model = train(bank, stats, steps, seed, PROJECT_DIR / "results" / f"{tag}.pt", sel)
     del bank
     gc.collect()
-    S, YV = score_scene(model, stats, test_df)
-    row = {"held_out": held_out, "model": "U-Net (base 16)", **metrics(S, YV)}
+    S, YV = score_scene(model, stats, test_df, sel)
+    row = {"held_out": held_out, "model": "U-Net (base 16)", "config": cfg, "n_channels": len(sel), **metrics(S, YV)}
     pd.DataFrame([row]).to_csv(PROJECT_DIR / "results" / f"{tag}_results.csv", index=False)
     print(row, flush=True)
     del model, S, YV
     gc.collect()
     torch.cuda.empty_cache()
 
+
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--folds", type=int, nargs="+", default=[1, 2])
     p.add_argument("--steps", type=int, default=3000)
+    p.add_argument("--config", nargs="+", default=["c1"], choices=list(CONFIGS))
     p.add_argument("--smoke", action="store_true")
     a = p.parse_args()
-    for f in a.folds:
-        run_fold(f, steps=20 if a.smoke else a.steps, smoke=a.smoke)
+    for cfg in a.config:
+        for f in a.folds:
+            run_fold(f, steps=20 if a.smoke else a.steps, smoke=a.smoke, cfg=cfg)
